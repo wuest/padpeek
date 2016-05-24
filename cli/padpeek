@@ -1,0 +1,53 @@
+#!/usr/bin/env ruby
+
+SNES_BUTTONS = { A:   0x0001, B: 0x0100, X:      0x0002, Y:     0x0200,
+                 '^': 0x1000, v: 0x2000, '<':    0x4000, '>':   0x8000,
+                 L:   0x0004, R: 0x0008, SELECT: 0x0400, START: 0x0800 }
+
+NES_BUTTONS = { A:   0x0100, B: 0x0200, SELECT: 0x0400, START: 0x0800,
+                '^': 0x1000, v: 0x2000, '<':    0x4000, '>':   0x8000 }
+
+CONTROLLER_IDS = [ NES_BUTTONS, SNES_BUTTONS ]
+
+
+def help
+  puts "Usage: #{$PROGRAM_NAME} <DEVICE>"
+  puts 'Reads output from a padspy arduino-modded controller'
+  exit
+end
+
+def synced_packet(serial)
+  buf = []
+  until buf[0, 4] == "SYNC".bytes && buf.size == 8
+    s_in = serial.read(1)
+    buf << s_in.ord unless s_in.nil?
+    buf = buf[-8, 8] if buf.size > 8
+  end
+  buf[4, 4]
+end
+
+def on((name, bit), byte)
+  format("#{name} (%s) ", byte & bit == 0 ? ' ' : "\033[31;41m+\033[0m")
+end
+
+def printable_state(id, bitmask)
+  CONTROLLER_IDS[id]
+    .each_with_object(bitmask)
+    .map(&method(:on))
+    .each_slice(4)
+    .each_with_object(' ')
+    .map(&:join)
+    .join("\n")
+end
+
+help unless ARGV.size == 1
+
+File.open(File.expand_path(ARGV.first)) do |serial|
+  print "\033[2J"
+  loop do
+    synced = synced_packet(serial)
+    print "\033[1;1H"
+    print printable_state(synced[1] << 8 | synced[0],
+                          synced[2] << 8 | synced[3])
+  end
+end
