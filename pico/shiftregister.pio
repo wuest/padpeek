@@ -23,13 +23,12 @@ static inline void shiftregister_program_init(PIO pio, uint sm, uint offset, uin
 {
     // Reserve the base pin and the next pin for communication
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
+    // Reserve latch pin too
+    pio_sm_set_consecutive_pindirs(pio, sm, latch, 1, false);
 
     // Set pull-up on all three pins and initialize for PIO execution
-    pio_gpio_init(pio, pin);
     gpio_pull_up(pin);
-    pio_gpio_init(pio, pin+1);
     gpio_pull_up(pin+1);
-    pio_gpio_init(pio, latch);
     gpio_pull_up(latch);
 
     pio_sm_config c = shiftregister_program_get_default_config(offset);
