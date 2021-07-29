@@ -14,7 +14,7 @@ pico_sdk_init()
 
 add_executable(padpeek)
 
-pico_generate_pio_header(padpeek pico/shiftregister.pio)
+pico_generate_pio_header(padpeek ${CMAKE_CURRENT_LIST_DIR}/pico/shiftregister.pio)
 
 target_sources(padpeek PRIVATE pico/padpeek.c)
 
