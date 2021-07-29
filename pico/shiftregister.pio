@@ -1,0 +1,44 @@
+.program shiftregister
+
+; pin assignments
+; - Clock is pin 0
+; - Data is pin 1
+; - Latch is jump pin
+
+start:
+    set x, 15 ; max number of clocks
+
+clock_loop:
+    wait 0 pin 0
+    wait 1 pin 0
+    in pins, 1
+    jmp pin cleanup ; In case fewer than 16 bits were read
+    jmp x-- clock_loop
+
+cleanup:
+    push
+
+% c-sdk {
+static inline void shiftregister_program_init(PIO pio, uint sm, uint offset, uint pin, uint latch)
+{
+    // Reserve the base pin and the next pin for communication
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
+
+    // Set pull-up on all three pins and initialize for PIO execution
+    pio_gpio_init(pio, pin);
+    gpio_pull_up(pin);
+    pio_gpio_init(pio, pin+1);
+    gpio_pull_up(pin+1);
+    pio_gpio_init(pio, latch);
+    gpio_pull_up(latch);
+
+    pio_sm_config c = shiftregister_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin+1);
+    sm_config_set_jmp_pin(&c, latch);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
