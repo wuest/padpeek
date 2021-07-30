@@ -1,42 +1,61 @@
-.program shiftregister
-
-; pin assignments
-; - Clock is pin 0
-; - Data is pin 1
-; - Latch is jump pin
-
-start:
-    set x, 15 ; max number of clocks
-
-clock_loop:
-    wait 0 pin 0
+; Wait for a high/low pulse, then set an IRQ
+.program pulse
     wait 1 pin 0
-    in pins, 1
-    jmp pin cleanup ; In case fewer than 16 bits were read
-    jmp x-- clock_loop
+    wait 0 pin 0
+    irq wait 0 rel
 
-cleanup:
+; Busy wait until forced to do work
+.program data
+busy:
+    jmp busy
+
+latch:
     push
+    irq clear 0
+    jmp busy
+
+clock:
+    in pins, 1
+    irq clear 1
+    jmp busy
 
 % c-sdk {
-static inline void shiftregister_program_init(PIO pio, uint sm, uint offset, uint pin, uint latch)
+static inline void pulse_program_init(PIO pio, uint sm, uint offset, uint pin)
 {
     // Reserve the base pin and the next pin for communication
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
 
-    // Set pull-up on all three pins and initialize for PIO execution
-    pio_gpio_init(pio, pin);
+    // Set pull-up on pin
     gpio_pull_up(pin);
-    pio_gpio_init(pio, pin+1);
-    gpio_pull_up(pin+1);
-    pio_gpio_init(pio, latch);
-    gpio_pull_up(latch);
 
-    pio_sm_config c = shiftregister_program_get_default_config(offset);
-    sm_config_set_in_pins(&c, pin+1);
-    sm_config_set_jmp_pin(&c, latch);
+    pio_sm_config c = pulse_program_get_default_config(offset);
     sm_config_set_in_shift(&c, false, false, 32);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    hw_clear_bits(&pio->inte0, 1u << sm);
+    hw_clear_bits(&pio->inte1, 1u << sm);
+    pio->irq = 1u << sm;
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void data_program_init(PIO pio, uint sm, uint offset, uint pin)
+{
+    // Reserve the base pin and the next pin for communication
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+
+    // Set pull-up on pin
+    gpio_pull_up(pin);
+
+    pio_sm_config c = data_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    hw_clear_bits(&pio->inte0, 1u << sm);
+    hw_clear_bits(&pio->inte1, 1u << sm);
+    pio->irq = 1u << sm;
 
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
