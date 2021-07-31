@@ -1,8 +1,13 @@
 ; Wait for a high/low pulse, then set an IRQ
-.program pulse
+.program latch
+    wait 0 pin 0
+    wait 1 pin 0
+    irq wait 0
+
+.program clock
     wait 1 pin 0
     wait 0 pin 0
-    irq wait 0 rel
+    irq wait 1
 
 ; Busy wait until forced to do work
 .program data
@@ -17,24 +22,39 @@ latch:
 clock:
     in pins, 1
     irq clear 1
-    jmp busy
 
 % c-sdk {
-static inline void pulse_program_init(PIO pio, uint sm, uint offset, uint pin)
+static inline void latch_program_init(PIO pio, uint sm, uint offset, uint pin)
 {
     // Reserve the base pin and the next pin for communication
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
 
     // Set pull-up on pin
-    gpio_pull_up(pin);
+    //gpio_pull_up(pin);
 
-    pio_sm_config c = pulse_program_get_default_config(offset);
-    sm_config_set_in_shift(&c, false, false, 32);
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_config c = latch_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin);
+    //sm_config_set_in_shift(&c, false, false, 16);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_NONE);
+    //pio->irq = 1u << sm;
 
-    hw_clear_bits(&pio->inte0, 1u << sm);
-    hw_clear_bits(&pio->inte1, 1u << sm);
-    pio->irq = 1u << sm;
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void clock_program_init(PIO pio, uint sm, uint offset, uint pin)
+{
+    // Reserve the base pin and the next pin for communication
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+
+    // Set pull-up on pin
+    //gpio_pull_up(pin);
+
+    pio_sm_config c = clock_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin);
+    //sm_config_set_in_shift(&c, false, false, 16);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_NONE);
+    //pio->irq = 1u << sm;
 
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
@@ -46,16 +66,13 @@ static inline void data_program_init(PIO pio, uint sm, uint offset, uint pin)
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
 
     // Set pull-up on pin
-    gpio_pull_up(pin);
+    //gpio_pull_up(pin);
 
     pio_sm_config c = data_program_get_default_config(offset);
     sm_config_set_in_pins(&c, pin);
-    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_in_shift(&c, false, false, 16);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-
-    hw_clear_bits(&pio->inte0, 1u << sm);
-    hw_clear_bits(&pio->inte1, 1u << sm);
-    pio->irq = 1u << sm;
+    //pio->irq = 1u << sm;
 
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
